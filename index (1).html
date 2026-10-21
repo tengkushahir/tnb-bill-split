@@ -132,6 +132,22 @@ th{font-size:.7rem;text-transform:uppercase;letter-spacing:.06em;color:var(--mut
 th:first-child,td:first-child{text-align:left}
 tr.click{cursor:pointer}
 tr.click:hover td{background:var(--sunk)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+.dash{gap:16px}
+.dash-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.dash-title{display:flex;flex-direction:column;gap:2px;min-width:0}
+.dash-title h2{font-size:clamp(1.6rem,7vw,2.1rem);line-height:1.1}
+.dash-meta{color:var(--muted);font-size:.85rem;font-variant-numeric:tabular-nums;display:flex;flex-direction:column}
+.dash-head select{width:auto;padding:6px 8px;font-size:.82rem;font-weight:600}
+.dash-pay{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.dp{border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.dp.nb{background:var(--nb-soft)}.dp.me{background:var(--me-soft)}
+.dp .who{font-weight:600;font-size:.95rem}
+.dp.nb .who{color:var(--nb)}.dp.me .who{color:var(--me)}
+.dp .amt{font-family:var(--display);font-weight:700;font-size:clamp(1.3rem,6.4vw,2.4rem);line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.dp.nb .amt{color:var(--nb)}.dp.me .amt{color:var(--me)}
+.dp .sub{color:var(--muted);font-size:.82rem;font-variant-numeric:tabular-nums}
+.dash-note{margin:0;font-size:.85rem;color:var(--warn)}
 .empty{padding:18px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:8px;font-size:.88rem}
 @media (prefers-reduced-motion:reduce){.splitbar span{transition:none}}
 </style>
@@ -144,6 +160,22 @@ tr.click:hover td{background:var(--sunk)}
     <h1>TNB Bill Split Calculator</h1>
     <p class="sub">One TNB meter, two units. Upload the bill, enter the sub-meter reading, and each line splits the way you've been doing it in your spreadsheet.</p>
   </header>
+
+  <section class="panel dash" aria-labelledby="h-dash">
+    <div class="dash-head">
+      <div class="dash-title">
+        <span class="eyebrow">TNB bill</span>
+        <h2 id="h-dash">–</h2>
+        <span class="dash-meta" id="dashMeta"></span>
+      </div>
+      <label><span class="sr">Show month</span><select id="dashMonth" aria-label="Show month"></select></label>
+    </div>
+    <div class="dash-pay">
+      <div class="dp nb"><span class="who" id="dNbName">Neighbour</span><span class="amt" id="dNbRM">–</span><span class="sub" id="dNbSub"></span></div>
+      <div class="dp me"><span class="who" id="dMeName">Me</span><span class="amt" id="dMeRM">–</span><span class="sub" id="dMeSub"></span></div>
+    </div>
+    <p class="dash-note" id="dashNote" hidden></p>
+  </section>
 
   <section class="panel" aria-labelledby="h-usage">
     <div class="panel-head"><h2 id="h-usage">1 · Usage this bill</h2><span class="tag" id="srcTag"></span></div>
@@ -467,6 +499,7 @@ function update(){
   }
   $("effRate").textContent = c.total ? `${(c.billTotal/c.total*100).toFixed(2)} sen/kWh all-in` : "";
   lsSet(LS_DRAFT, S);
+  if (typeof renderDash === "function") renderDash(c);
   return c;
 }
 
@@ -577,7 +610,7 @@ $("saveBtn").addEventListener("click", async () => {
   } else toast(`${monthName(S.month)} saved on this device.`);
 });
 
-function loadRecord(m){
+function loadRecord(m, opt){
   const r = history[m]; if (!r) return;
   let lines = (r.lines || []).map(l => ({...l, id:uid++}));
   if (!lines.length) lines = blankLines();
@@ -587,12 +620,14 @@ function loadRecord(m){
     threshold:String(r.threshold ?? defaultThreshold(r.month)), diffMode:r.diffMode || "half", src: r.imported ? "Totals only, from your sheet" : "",
     afaK2: r.afaK2 ?? "", lines};
   loadInputs(); renderLines(); update();
+  if (opt && opt.quiet) return;
   toast(r.imported ? `Loaded ${monthName(m)}. Only totals came over from the spreadsheet; add the bill lines to see the split.` : `Loaded ${monthName(m)}.`);
-  window.scrollTo({top:0, behavior:"smooth"});
+  document.querySelector("[aria-labelledby=h-usage]").scrollIntoView({behavior:"smooth", block:"start"});
 }
 
 function niceMax(v){ const p = Math.pow(10, Math.floor(Math.log10(v))); for (const k of [1,1.5,2,2.5,3,4,5,6,8,10]) if (k*p >= v) return k*p; return 10*p; }
 function renderHistory(){
+  renderDash();
   const months = Object.keys(history).sort(), body = $("histBody");
   if (!months.length){ body.innerHTML = OFFLINE
     ? `<div class="empty">Your record is empty on this phone. Tap <b>Import record file</b> and pick your tnb-record file to bring in past months, or upload a bill and tap <b>Save this month</b> to start.</div>`
@@ -831,6 +866,7 @@ $("recFile").addEventListener("change", async e => {
   if (!S.month && !S.nbPrev && latest.nbCurr) S.nbPrev = String(latest.nbCurr);
   loadInputs(); renderLines(); update(); renderHistory();
   const ks = ok.map(([k]) => k).sort();
+  if (!S.month) loadRecord(Object.keys(history).sort().pop(), {quiet:true});
   recMsg(`Imported ${ok.length} months, ${monthName(ks[0])} to ${monthName(ks[ks.length-1])}. Next, upload your newest bill.`, "ok");
 });
 $("recExport").addEventListener("click", async () => {
@@ -850,7 +886,40 @@ $("recExport").addEventListener("click", async () => {
   recMsg(`Saved ${name} with ${ms.length} months to your downloads.`, "ok");
 });
 
+// ---- Dashboard: the month on screen, big and simple (made to be screenshotted) ----
+function renderDash(c){
+  if (!c) c = calc();
+  const sel = $("dashMonth"), saved = Object.keys(history).sort().reverse();
+  const opts = S.month && !history[S.month] ? [S.month, ...saved] : saved;
+  sel.innerHTML = opts.map(m => `<option value="${m}"${m === S.month ? " selected" : ""}>${monthName(m)}${history[m] ? "" : " (not saved)"}</option>`).join("");
+  sel.hidden = opts.length < 2;
+  $("h-dash").textContent = S.month ? monthName(S.month) : "This month";
+  const haveBill = c.total > 0 && S.billTotal !== "";
+  const haveR = S.nbCurr !== "" && S.nbPrev !== "";
+  // bill period, only when it came from the bill or was entered for this month
+  const recP = history[S.month], guessed = recP && !recP.pFrom && (!recP.lines || !recP.lines.length);
+  let period = "";
+  if (S.pFrom && S.pTo && !guessed){
+    const a = fmtD(S.pFrom), b2 = fmtD(S.pTo);
+    period = S.pFrom.slice(0,4) === S.pTo.slice(0,4) ? `${a.replace(/\s\d{4}$/, "")} – ${b2}` : `${a} – ${b2}`;
+  }
+  $("dashMeta").innerHTML = haveBill ? `${period ? `<span>${esc(period)}</span>` : ""}<span>${c.total} kWh · bill ${fmt(c.billTotal)}</span>` : "";
+  $("dNbName").textContent = nbN(); $("dMeName").textContent = meN();
+  const ready = haveBill && haveR;
+  // Months brought over from the spreadsheet carry totals only: show what was settled then
+  const rec = history[S.month], totalsOnly = rec && (!rec.lines || !rec.lines.length) && S.lines.every(l => num(l.amount) === 0);
+  const nbAmt = totalsOnly ? num(rec.nbRM) : c.nbTotal, meAmt = totalsOnly ? num(rec.meRM) : c.meTotal;
+  $("dNbRM").textContent = ready ? fmt(nbAmt) : "–";
+  $("dMeRM").textContent = ready ? fmt(meAmt) : "–";
+  $("dNbSub").textContent = ready ? `${c.nbK} kWh` : "";
+  $("dMeSub").textContent = ready ? `${c.house} kWh` : "";
+  const note = !haveBill ? "Upload this month's TNB bill below to see who pays." : !haveR ? `Enter ${nbN()}'s sub-meter reading below to see who pays.` : "";
+  $("dashNote").textContent = note; $("dashNote").hidden = !note;
+}
+$("dashMonth").addEventListener("change", e => { const m = e.target.value; if (history[m]) loadRecord(m, {quiet:true}); });
+
 loadInputs(); renderLines(); update(); renderHistory();
+if (!S.month && Object.keys(history).length) loadRecord(Object.keys(history).sort().pop(), {quiet:true});
 $("storeNote").textContent = "Saved on this device";
 
 (async () => {
