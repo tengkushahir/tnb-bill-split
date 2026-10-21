@@ -29,14 +29,8 @@ img{max-width:100%}[hidden]{display:none!important}</style>
   --mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
   --r:12px;
 }
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
-  --bg:#0D1220; --surface:#151C2E; --sunk:#1C2539; --ink:#E6EAF3; --muted:#949DB3; --line:#2A3449;
-  --me:#7FA4F5; --me-soft:#1E2D52; --nb:#FF6A6F; --nb-soft:#43191E;
-  --warn:#F2B45C; --warn-soft:#3A2A12; --ok:#7BCB86; color-scheme:dark}}
-:root[data-theme="dark"]{
-  --bg:#0D1220; --surface:#151C2E; --sunk:#1C2539; --ink:#E6EAF3; --muted:#949DB3; --line:#2A3449;
-  --me:#7FA4F5; --me-soft:#1E2D52; --nb:#FF6A6F; --nb-soft:#43191E;
-  --warn:#F2B45C; --warn-soft:#3A2A12; --ok:#7BCB86; color-scheme:dark}
+/* Light only, by choice: the page stays light even when the device is in dark mode */
+:root{color-scheme:light}
 
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:15px;line-height:1.5}
