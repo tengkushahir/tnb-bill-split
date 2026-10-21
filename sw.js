@@ -1,5 +1,5 @@
 // TNB Bill Split Calculator: keeps the app on the phone so it opens and reads bills without internet.
-const CACHE = "dkbs-2026-10-21-7";
+const CACHE = "dkbs-2026-10-21-8";
 const FILES = ["./", "index.html", "manifest.webmanifest", "icon-192.png", "icon-512.png", "icon-maskable-512.png", "apple-touch-icon.png"];
 self.addEventListener("install", e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));
